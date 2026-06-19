@@ -14,11 +14,7 @@ OpenLDAP → Keycloak → Grafana
 keycloak-ldap-lab/
 ├── docker-compose.yml
 ├── docs/
-│   ├── step1-ldap-federation.md
-│   ├── step2-otp.md
-│   ├── step3-webauthn.md
-│   ├── step4-role-based-mfa.md
-│   └── keycloak-notes.md
+│   ├── *.md
 ├── ldap/
 │   └── init.ldif
 ├── keycloak/
@@ -27,8 +23,7 @@ keycloak-ldap-lab/
 ├── grafana/
 │   └── grafana.ini
 ├── Makefile
-├── README.md
-└── TROUBLESHOOTING.md
+└── README.md
 ```
 
 ---
