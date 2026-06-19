@@ -1,39 +1,73 @@
-# keycloak-freeipa-lab
+# keycloak-ldap-lab
 
-Учебный стенд для практики с Keycloak:
+Учебный стенд для практики с Keycloak, LDAP, OIDC, MFA и Authentication Flows.
 
 ```text
-Postgres → Keycloak → Grafana
-              ↑
-          optional FreeIPA
+OpenLDAP → Keycloak → Grafana
 ```
 
-## Что есть в проекте
+---
+
+# Что есть в проекте
 
 ```text
-keycloak-freeipa-lab/
+keycloak-ldap-lab/
 ├── docker-compose.yml
-├── docs/*.md
+├── docs/
+│   ├── step1-ldap-federation.md
+│   ├── step2-otp.md
+│   ├── step3-webauthn.md
+│   ├── step4-role-based-mfa.md
+│   └── keycloak-notes.md
+├── ldap/
+│   └── init.ldif
 ├── keycloak/
 │   ├── themes/company/
 │   └── realm-export.json
 ├── grafana/
 │   └── grafana.ini
-├── freeipa/
-│   └── init-freeipa.sh
+├── Makefile
 ├── README.md
 └── TROUBLESHOOTING.md
 ```
 
-## Порты
+---
 
-| Сервис | URL |
-|---|---|
-| Keycloak | http://localhost:8080 |
-| Grafana | http://localhost:3000 |
-| FreeIPA, optional | http://localhost:8081 / https://localhost:8443 |
+# Архитектура
 
-## Быстрый запуск
+```text
+                ┌──────────┐
+                │ OpenLDAP │
+                └────┬─────┘
+                     │ LDAP
+                     ▼
+              ┌────────────┐
+              │ Keycloak   │
+              │ Federation │
+              └─────┬──────┘
+                    │ OIDC
+                    ▼
+              ┌────────────┐
+              │ Grafana    │
+              └────────────┘
+```
+
+---
+
+# Порты
+
+| Сервис       | URL                   |
+| ------------ | --------------------- |
+| Keycloak     | http://localhost:8080 |
+| Grafana      | http://localhost:3000 |
+| phpLDAPadmin | http://localhost:8082 |
+| OpenLDAP     | ldap://localhost:389  |
+
+---
+
+# Быстрый запуск
+
+Запуск стенда:
 
 ```bash
 docker compose up -d
@@ -43,12 +77,14 @@ docker compose up -d
 
 ```bash
 docker compose ps
-docker logs -f keycloak
+docker compose logs -f
 ```
 
-## Доступы
+---
 
-### Keycloak admin
+# Доступы
+
+## Keycloak
 
 ```text
 URL:      http://localhost:8080
@@ -56,13 +92,17 @@ Login:    admin
 Password: admin
 ```
 
-### Realm
+---
+
+## Realm
 
 ```text
-Realm: company
+company
 ```
 
-### Grafana local admin
+---
+
+## Grafana
 
 ```text
 URL:      http://localhost:3000
@@ -70,153 +110,384 @@ Login:    admin
 Password: admin
 ```
 
-### Пользователи Keycloak
+---
 
-| Username | Password | Роль Grafana |
-|---|---|---|
-| grafana-admin | Admin123456 | Admin |
-| grafana-editor | Editor123456 | Editor |
-| grafana-viewer | Viewer123456 | Viewer |
-
-## Проверка OIDC-логина
-
-1. Открой Grafana: http://localhost:3000
-2. Нажми `Sign in with Keycloak`.
-3. Войди пользователем:
+## OpenLDAP
 
 ```text
-grafana-admin / Admin123456
+Bind DN:
+cn=admin,dc=company,dc=local
+
+Password:
+admin
 ```
 
-4. После входа пользователь должен получить роль `Admin`.
+---
 
-## Как это работает
-
-Grafana настроена как OIDC-клиент Keycloak.
+## phpLDAPadmin
 
 ```text
-Browser → Grafana → Keycloak login → Grafana callback → token exchange → session
+URL:
+http://localhost:8082
 ```
 
-В Keycloak есть client:
+---
+
+# LDAP структура
+
+После импорта LDIF создаётся структура:
 
 ```text
-Client ID: grafana
-Client secret: grafana-secret
-Redirect URI: http://localhost:3000/login/generic_oauth
+dc=company,dc=local
+├── ou=users
+│   ├── ivan
+│   ├── petr
+│   └── egor
+│
+└── ou=groups
+    ├── grafana-admins
+    ├── grafana-editors
+    └── grafana-viewers
 ```
 
-В токен добавляются:
+---
+
+# Загрузка LDAP данных
+
+Импорт структуры:
+
+```bash
+make ldap-setup
+```
+
+Проверка:
+
+```bash
+make ldap-search
+```
+
+---
+
+# LDAP группы
+
+Используется тип групп:
 
 ```text
-realm_access.roles
-groups
-email
-profile
+posixGroup
 ```
 
-Grafana читает `realm_access.roles` и мапит роль:
+Пример:
 
 ```text
-grafana-admin  → Admin
-grafana-editor → Editor
-default        → Viewer
+grafana-admins
+    └── ivan
+
+grafana-editors
+    └── egor
+
+grafana-viewers
+    └── petr
 ```
 
-## Custom theme
+---
 
-Тема лежит тут:
+# LDAP Federation
+
+В Keycloak настроен LDAP Provider.
+
+Основные параметры:
+
+```text
+Connection URL:
+ldap://openldap:389
+
+Users DN:
+ou=users,dc=company,dc=local
+
+Bind DN:
+cn=admin,dc=company,dc=local
+
+Import Users:
+ON
+
+Edit Mode:
+READ_ONLY
+```
+
+После настройки выполняется:
+
+```text
+Sync All Users
+```
+
+---
+
+# Авторизация
+
+Схема входа:
+
+```text
+Browser
+ ↓
+Grafana
+ ↓
+Keycloak
+ ↓
+OpenLDAP
+ ↓
+OIDC Token
+ ↓
+Grafana
+```
+
+---
+
+# Роли
+
+LDAP группы импортируются в Keycloak.
+
+Далее группам назначаются Realm Roles:
+
+```text
+grafana-admins
+    ↓
+grafana-admin
+
+grafana-editors
+    ↓
+grafana-editor
+
+grafana-viewers
+    ↓
+grafana-viewer
+```
+
+---
+
+# Grafana Role Mapping
+
+Grafana получает роли из JWT токена:
+
+```json
+{
+  "realm_access": {
+    "roles": [
+      "grafana-admin"
+    ]
+  }
+}
+```
+
+Маппинг:
+
+```text
+grafana-admin
+    ↓
+Admin
+
+grafana-editor
+    ↓
+Editor
+
+default
+    ↓
+Viewer
+```
+
+---
+
+# MFA
+
+В лаборатории реализованы:
+
+```text
+Password Authentication
+OTP Authentication
+WebAuthn Authentication
+Role Based MFA
+```
+
+---
+
+# Role Based MFA
+
+Настроены разные требования MFA.
+
+```text
+Admin
+ ↓
+Password + WebAuthn
+
+Editor
+ ↓
+Password + OTP или WebAuthn
+
+Viewer
+ ↓
+Password only
+```
+
+---
+
+# WebAuthn
+
+Поддерживаются:
+
+```text
+Windows Hello
+Touch ID
+Face ID
+Passkeys
+YubiKey
+```
+
+Проверка:
+
+```text
+Users
+→ Credentials
+```
+
+Должен появиться:
+
+```text
+WebAuthn Credential
+```
+
+---
+
+# Custom Theme
+
+Тема находится:
 
 ```text
 keycloak/themes/company/
 ```
 
-Она подключена в realm import:
+Содержит:
 
 ```text
-loginTheme: company
+login/
+├── resources/css
+├── messages
+└── templates
 ```
 
-После изменения CSS можно перезапустить Keycloak:
-
-```bash
-docker compose restart keycloak
-```
-
-Для dev-стенда кэш тем отключён через env:
+Изучаемые элементы:
 
 ```text
-KC_SPI_THEME_CACHE_THEMES=false
-KC_SPI_THEME_CACHE_TEMPLATES=false
+CSS
+Localization
+messages.properties
+login.ftl
 ```
 
-## Optional: запуск FreeIPA
+---
 
-FreeIPA в контейнере тяжёлый и капризный. Лучше запускать на Linux-хосте или в отдельной VM. На Docker Desktop может не завестись из-за systemd/cgroup/privileged-ограничений.
+# Полезные команды
 
 Запуск:
 
 ```bash
-docker compose --profile freeipa up -d freeipa
+make up
 ```
 
-Логи:
+Остановка:
 
 ```bash
-docker logs -f freeipa
+make down
 ```
 
-Когда установка завершится, можно создать тестовые группы и пользователей:
+Просмотр контейнеров:
 
 ```bash
-docker cp ./freeipa/init-freeipa.sh freeipa:/data/init-freeipa.sh
-docker exec -it freeipa bash /data/init-freeipa.sh
+make watch
 ```
 
-## Подключение FreeIPA к Keycloak вручную
+LDAP импорт:
 
-Открой:
+```bash
+make ldap-setup
+```
+
+LDAP поиск:
+
+```bash
+make ldap-search
+```
+
+Полный сброс:
+
+```bash
+make clean
+```
+
+---
+
+# Что отрабатывать в лаборатории
+
+## LDAP
+
+* Добавление пользователей
+* Добавление групп
+* Изменение атрибутов
+* Group Mapping
+* Federation
+
+## Keycloak
+
+* Realm
+* Clients
+* Roles
+* Groups
+* Client Scopes
+* Authentication Flows
+* OTP
+* WebAuthn
+* Themes
+
+## OIDC
+
+* Redirect URI
+* JWT Token
+* Claims
+* Scopes
+* Mappers
+
+## Troubleshooting
+
+* User Sync Failed
+* LDAP Group Mapping
+* Invalid Redirect URI
+* Missing Email
+* MFA Problems
+* WebAuthn Problems
+
+---
+
+# Документация
+
+Подробные лабораторные шаги находятся в директории:
 
 ```text
-Keycloak → realm company → User federation → Add LDAP providers
+docs/
 ```
 
-Пример настроек:
+Покрываемые темы:
 
 ```text
-Vendor: Other
-Connection URL: ldap://ipa.company.local:389
-Users DN: cn=users,cn=accounts,dc=company,dc=local
-Bind DN: uid=admin,cn=users,cn=accounts,dc=company,dc=local
-Bind credential: Admin123456
-Edit mode: READ_ONLY
-Username LDAP attribute: uid
-RDN LDAP attribute: uid
-UUID LDAP attribute: ipaUniqueID
-User object classes: inetOrgPerson, organizationalPerson
-Search scope: Subtree
-Import users: ON
-Sync Registrations: OFF
+LDAP Federation
+LDAP Groups
+Role Mapping
+OIDC
+Grafana Integration
+OTP
+WebAuthn
+Authentication Flows
+Role Based MFA
+Client Scopes
+Theme Customization
+Troubleshooting
 ```
 
-Потом:
-
-```text
-User federation → твой LDAP provider → Action → Sync all users
-```
-
-## Что тренировать
-
-1. Создать client руками.
-2. Сломать redirect URI.
-3. Сломать client secret.
-4. Посмотреть токен через jwt.io или curl.
-5. Добавить новую роль.
-6. Добавить mapper.
-7. Подключить FreeIPA.
-8. Проверить sync users.
-9. Поменять тему login-страницы.
-10. Разобрать логи Keycloak и Grafana.
-
-## Шаги по воспроизведению указаны в директории docs  
-[В директории](./docs/) представлены шаги по воспроизведению 70-80% всего используемого функционала *Keycloak* при администрировании.
+После прохождения всех шагов покрывается большая часть задач, которые обычно встречаются при сопровождении и администрировании Keycloak в корпоративной среде.
