@@ -1,0 +1,81 @@
+# =====================================================
+# USERS OU
+# =====================================================
+
+dn: ou=users,dc=company,dc=local
+objectClass: top
+objectClass: organizationalUnit
+ou: users
+
+# =====================================================
+# GROUPS OU
+# =====================================================
+
+dn: ou=groups,dc=company,dc=local
+objectClass: top
+objectClass: organizationalUnit
+ou: groups
+
+# =====================================================
+# USER: IVAN
+# =====================================================
+
+dn: uid=ivan,ou=users,dc=company,dc=local
+objectClass: top
+objectClass: person
+objectClass: organizationalPerson
+objectClass: inetOrgPerson
+
+uid: ivan
+cn: Ivan Ivanov
+sn: Ivanov
+givenName: Ivan
+
+mail: ivan@company.local
+
+userPassword: 123456
+
+# =====================================================
+# USER: PETR
+# =====================================================
+
+dn: uid=petr,ou=users,dc=company,dc=local
+objectClass: top
+objectClass: person
+objectClass: organizationalPerson
+objectClass: inetOrgPerson
+
+uid: petr
+cn: Petr Petrov
+sn: Petrov
+givenName: Petr
+
+mail: petr@company.local
+
+userPassword: 123456
+
+# =====================================================
+# GROUP: GRAFANA ADMINS
+# =====================================================
+
+dn: cn=grafana-admins,ou=groups,dc=company,dc=local
+objectClass: top
+objectClass: posixGroup
+
+cn: grafana-admins
+gidNumber: 10001
+
+memberUid: ivan
+
+# =====================================================
+# GROUP: GRAFANA VIEWERS
+# =====================================================
+
+dn: cn=grafana-viewers,ou=groups,dc=company,dc=local
+objectClass: top
+objectClass: posixGroup
+
+cn: grafana-viewers
+gidNumber: 10002
+
+memberUid: petr
